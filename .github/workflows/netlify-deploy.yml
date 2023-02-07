@@ -1,0 +1,121 @@
+# https://github.com/netlify/actions/tree/master/cli
+name: Publish on Netlify
+
+on:
+  pull_request:
+    branches: ["main", "develop"]
+
+  workflow_dispatch:
+
+jobs:
+  publish-prod:
+    runs-on: ubuntu-latest
+    if: ${{ github.base_ref == 'main' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: 📬 Caching
+        uses: actions/cache@v3
+        with:
+          path: |
+            **/node_modules
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Use Node.js 16.17.0
+        uses: actions/setup-node@v1
+        with:
+          node-version: 16.17.0
+
+      - name: 🧰 Install dependencies
+        run: npm ci
+
+      - name: 📒 Install netlify-cli
+        run: npm install netlify-cli -g
+
+      - name: 📒 Install next
+        run: npm install next -g
+
+      - name: 🗄 Import Env
+        run: cp .env.prod.example .env
+
+      - name: 🚀 Deploy to Netlify
+        id: deploy-netlify
+        env:
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID_PROD }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+        run: |
+          OUTPUT=$(netlify deploy --build -m '${{ github.head_ref }} . ${{ github.event.pull_request.title }}')
+          NETLIFY_OUTPUT=$(echo "$OUTPUT")
+          NETLIFY_URL=$(echo "$OUTPUT" | grep -Eo '(http|https)://[a-zA-Z0-9./?=_-]*(--)[a-zA-Z0-9./?=_-]*') #Unique key: --
+          NETLIFY_LOGS_URL=$(echo "$OUTPUT" | grep -Eo '(http|https)://app.netlify.com/[a-zA-Z0-9./?=_-]*') #Unique key: app.netlify.com
+          NETLIFY_LIVE_URL=$(echo "$OUTPUT" | grep -Eo '(http|https)://[a-zA-Z0-9./?=_-]*' | grep -Eov "netlify.com") #Unique key: don't containr -- and app.netlify.com
+          echo "::set-output name=NETLIFY_OUTPUT::$NETLIFY_OUTPUT"
+          echo "::set-output name=NETLIFY_URL::$NETLIFY_URL"
+          echo "::set-output name=NETLIFY_LOGS_URL::$NETLIFY_LOGS_URL"
+          echo "::set-output name=NETLIFY_LIVE_URL::$NETLIFY_LIVE_URL"
+
+      - name: 👓 Netlify Preview URL
+        uses: unsplash/comment-on-pr@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OUTPUT: "This pull request is being automatically deployed to Netlify.\n\n🔍 Inspect: ${{ steps.deploy-netlify.outputs.NETLIFY_LOGS_URL }}\n✅ Preview: ${{ steps.deploy-netlify.outputs.NETLIFY_URL }}"
+        with:
+          msg: ${{ env.OUTPUT }}
+          check_for_duplicate_msg: false
+
+  publish-dev:
+    runs-on: ubuntu-latest
+    if: ${{ github.base_ref == 'develop' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: 📬 Caching
+        uses: actions/cache@v3
+        with:
+          path: |
+            **/node_modules
+          key: ${{ runner.os }}-modules-${{ hashFiles('**/package-lock.json') }}
+
+      - name: Use Node.js 16.17.0
+        uses: actions/setup-node@v1
+        with:
+          node-version: 16.17.0
+
+      - name: 🧰 Install dependencies
+        run: npm ci
+
+      - name: 📒 Install netlify-cli
+        run: npm install netlify-cli -g
+
+      - name: 📒 Install next
+        run: npm install next -g
+
+      - name: 🗄 Import Env
+        run: cp .env.dev.example .env
+
+      - name: 🚀 Deploy to Netlify
+        id: deploy-netlify
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID_DEV }}
+        run: |
+          OUTPUT=$(netlify deploy --build -m '${{ github.head_ref }} . ${{ github.event.pull_request.title }}')
+          NETLIFY_OUTPUT=$(echo "$OUTPUT")
+          NETLIFY_URL=$(echo "$OUTPUT" | grep -Eo '(http|https)://[a-zA-Z0-9./?=_-]*(--)[a-zA-Z0-9./?=_-]*') #Unique key: --
+          NETLIFY_LOGS_URL=$(echo "$OUTPUT" | grep -Eo '(http|https)://app.netlify.com/[a-zA-Z0-9./?=_-]*') #Unique key: app.netlify.com
+          NETLIFY_LIVE_URL=$(echo "$OUTPUT" | grep -Eo '(http|https)://[a-zA-Z0-9./?=_-]*' | grep -Eov "netlify.com") #Unique key: don't containr -- and app.netlify.com
+          echo "::set-output name=NETLIFY_OUTPUT::$NETLIFY_OUTPUT"
+          echo "::set-output name=NETLIFY_URL::$NETLIFY_URL"
+          echo "::set-output name=NETLIFY_LOGS_URL::$NETLIFY_LOGS_URL"
+          echo "::set-output name=NETLIFY_LIVE_URL::$NETLIFY_LIVE_URL"
+
+      - name: 👓 Netlify Preview URL
+        uses: unsplash/comment-on-pr@master
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OUTPUT: "This pull request is being automatically deployed to Netlify.\n\n🔍 Inspect: ${{ steps.deploy-netlify.outputs.NETLIFY_LOGS_URL }}\n✅ Preview: ${{ steps.deploy-netlify.outputs.NETLIFY_URL }}"
+        with:
+          msg: ${{ env.OUTPUT }}
+          check_for_duplicate_msg: false
